@@ -1,0 +1,127 @@
+.data
+prompt_num : .asciiz "Enter number (base 2 to 10): "
+prompt_base : .asciiz "Enter base (2-10): "
+result_msg : .asciiz "Decimal equivalent is: "
+newline : .asciiz "\n"
+
+buffer : .space 32        # buffer for number input(max 31 chars + null)
+
+.text
+.globl main
+
+main :
+# Prompt for number
+li $v0, 4
+la $a0, prompt_num
+syscall
+
+# Read number string
+li $v0, 8
+la $a0, buffer
+li $a1, 32
+syscall
+
+# Remove newline from input(if any)
+la $t0, buffer
+remove_newline :
+lb $t1, 0($t0)
+beq $t1, 0, end_remove_newline
+beq $t1, 10, set_null
+addi $t0, $t0, 1
+j remove_newline
+set_null :
+sb $zero, 0($t0)
+end_remove_newline :
+
+    # Prompt for base
+    li $v0, 4
+    la $a0, prompt_base
+    syscall
+
+    # Read base integer
+    li $v0, 5
+    syscall
+    move $t2, $v0           # $t2 = base
+
+    # Validate base 2 to 10
+    blt $t2, 2, invalid_base
+    bgt $t2, 10, invalid_base
+
+    # Calculate string length and set pointer to end of string
+    la $t0, buffer          # start of input string
+    move $t3, $t0           # will move pointer to end
+    strlen_loop :
+lb $t1, 0($t3)
+beq $t1, 0, strlen_done
+addi $t3, $t3, 1
+j strlen_loop
+strlen_done :
+# $t3 points to null byte, go back one to last char
+addi $t3, $t3, -1
+
+# Initialize decimal sum and power
+li $t4, 0               # sum = 0
+li $t5, 1               # power = 1 (b ^ 0)
+
+convert_loop:
+blt $t3, $t0, done_convert  # If pointer < start, done
+
+    lb $t1, 0($t3)           # load digit character
+    # Convert ASCII '0' - '9' to digit value
+    li $t6, 48               # ASCII '0'
+    sub $t1, $t1, $t6        # digit = char - '0'
+
+    # Check if digit < base, else invalid input
+    bge $t1, $t2, invalid_digit
+
+    # digit * power
+    mul $t7, $t1, $t5
+
+    # sum += digit * power
+    addu $t4, $t4, $t7
+
+    # power *= base
+    mul $t5, $t5, $t2
+
+    addi $t3, $t3, -1        # move pointer left
+    j convert_loop
+
+    done_convert :
+# Print result message
+li $v0, 4
+la $a0, result_msg
+syscall
+
+# Print decimal result(sum)
+move $a0, $t4
+li $v0, 1
+syscall
+
+# Print newline
+li $v0, 4
+la $a0, newline
+syscall
+
+# Exit
+li $v0, 10
+syscall
+
+invalid_base :
+li $v0, 4
+la $a0, invalid_base_msg
+syscall
+j exit
+
+invalid_digit :
+li $v0, 4
+la $a0, invalid_digit_msg
+syscall
+j exit
+
+exit :
+li $v0, 10
+syscall
+
+.data
+invalid_base_msg : .asciiz "Invalid base entered! Must be 2 to 10.\n"
+invalid_digit_msg : .asciiz "Invalid digit for the base.\n"
